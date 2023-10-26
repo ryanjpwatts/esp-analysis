@@ -40,7 +40,7 @@ These usually take the form of rule engines, machine learning models and other b
 An additional form of server-sided anti-cheat is simply server-authorative features, with online games being the classic example of the client-server architecture a lot of cheating can be prevented with a more server-authorative design, which goes on to the solution...
 
 ## The solution (sort of)
-As covered in the [How does ESP work?](https://github.com/ryanjpwatts/esp-analysis/edit/main/README.md#what-is-esp) section, we know we need the objects position data in memory to create these ESP hacks to begin with so it begs the question, why are games not taking a more server-authorative stance on this and simply not sending positional data for objects if they cannot be seen by the player?
+As covered in the [How does ESP work?](https://github.com/ryanjpwatts/esp-analysis#what-is-esp) section, we know we need the objects position data in memory to create these ESP hacks to begin with so it begs the question, why are games not taking a more server-authorative stance on this and simply not sending positional data for objects if they cannot be seen by the player?
 
 Firstly, it's of course worth saying, it is easier said than done but it is a feasible option that would outright prevent ESPs as we know them from functioning at all. Let's look at a demo for this I made in a few hours using Unity with Mirror Networking -
 
