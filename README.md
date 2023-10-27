@@ -31,7 +31,7 @@ Client-sided anti-cheat measures are methods to prevent and identify cheating th
 
 Generally, these types of solutions will run in the kernel and look for modifications of the games code, prevent external processes from reading the games memory (as a result making dynamic analysis more difficult), prevent suspicious DLLs from being injected into the game process as well as a myriad of other things. Generally speaking, current client-sided anti-cheating solutions don't do anything to prevent ESP cheats in particular but rather combat methodology to create and run cheats.
 
-I personally believe there is little room for client-sided measures to achieve much more than they already have with regards to ESP in particular, anti-cheating measures have toyed with the idea of [taking screenshots of players screens](https://ucp-anticheat.org/screens.html) in the past. The Windows API offers functionality such as setting the window display affinity to circumvent these screenshotting measures but there is never any harm in an additional detection vector.
+I personally believe there is little room for client-sided measures to achieve much more than they already have with regards to ESP in particular, anti-cheating measures have toyed with the idea of [taking screenshots of players screens](https://ucp-anticheat.org/screens.html) in the past. The Windows API offers functionality such as [setting the window display affinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity) to circumvent these screenshotting measures but there is never any harm in an additional detection vector.
 ## Server-sided
 On the other hand, server-sided anti-cheat measures are methods to prevent, mitigate and identify cheating that run on the game server (or more typically backend game services). 
 
@@ -44,7 +44,7 @@ As covered in the [How does ESP work?](https://github.com/ryanjpwatts/esp-analys
 
 Firstly, it's of course worth saying, it is easier said than done but it is a feasible option that would outright prevent ESPs as we know them from functioning at all. Let's look at a demo for this I made in a few hours using Unity with Mirror Networking -
 
-https://github.com/ryanjpwatts/esp-analysis/assets/33863267/e8833491-f49a-4e13-8ea3-3f4493453c55
+https://github.com/ryanjpwatts/esp-analysis/assets/33863267/5b62e1ff-01c2-487e-b019-6b9ad2ab94b2
 
 ```
 public class ESPInterestManagement : InterestManagement
@@ -72,11 +72,14 @@ public class ESPInterestManagement : InterestManagement
     private bool ValidateObserver(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
         int blockMask = 1 << 6;
-        bool directHit = Physics.Linecast(identity.transform.position, newObserver.identity.transform.position, out RaycastHit hit, blockMask);
-        bool rightHit = Physics.Linecast(identity.transform.position + identity.transform.right, newObserver.identity.transform.position + -newObserver.identity.transform.right, out RaycastHit lHit, blockMask);
-        bool leftHit = Physics.Linecast(identity.transform.position + -identity.transform.right, newObserver.identity.transform.position + newObserver.identity.transform.right, out RaycastHit rHit, blockMask);
+        List<Vector3> angles = new() { new Vector3(0, 0, 0), -identity.transform.right, identity.transform.right, identity.transform.up, -identity.transform.up };
 
-        return !directHit || !leftHit || !rightHit;
+        foreach (Vector3 angle in angles)
+        {
+            if (!Physics.Linecast(identity.transform.position + angle, newObserver.identity.transform.position, out _, blockMask)) return true;
+        }
+
+        return false;
     }
 
     [ServerCallback]
@@ -86,18 +89,27 @@ public class ESPInterestManagement : InterestManagement
     }
 }
 ```
-This simple solution has a dedicated server running and 2 clients connected to it, making use of Mirror Networkings interest management solution and physics-based culling by sending out 3 Linecasts from one client to another, one on the left-side, one on the middle, one on the right-side. Simply if all three rays hit an object with a blockable layer mask then the server will simply not send positional data to the client. As can be observed by the video when you are very close to corner edges the ESP will still sometimes work so of course my solution still needs some fine tuning :p 
+This simple solution has a dedicated server running and 2 clients connected to it, making use of Mirror Networkings interest management solution and physics-based culling by sending out 5 Linecasts from one clients camera position to another, covering all angles that the player should be able to see from (straight, left, right, above, below). Once one of the rays successfully hit the client without an object marked with a block layer mask in the way then it will return and the server will proceed with sending the packets to the client.
 
-The two major drawback of this solution is functionality and efficiency. Anti-cheating measures should never affect legitimate players experiences and if this solution fails causing one player to see another player and the other cannot or two players are unable to see each other you may have some very unhappy players. 
+The two major drawbacks of this solution is functionality and efficiency. 
 
-With this in mind, we would want our solution to be as accurate as possible and as a result it may be slightly more computationally expensive than 3 simple Unity linecasts and when we need to factor in that the server will be running these checks every frame with each clients position being validated against every other clients position (presumably after some range checks and other game-specific validation), we are creating an exponential time complexity problem. 
+Anti-cheating measures should never affect legitimate players experiences and if this solution fails for instance, causing one player to see another player and the other cannot or two players are unable to see each other you may have some very unhappy players, and this would be unacceptable in any competitive gaming scenario. Additionally, in my example above I am running the server and both clients locally so I do not have to worry about latency, the solution may look a bit less fluid in a situation where you have a player at 100ms and another at 10ms. This could be solved with a bit of leniency i.e. ensuring packets are sent just before they turn a corner but of course that may compromise the effectiveness of our method.
 
-Functionality and efficiency aside, this of course is no silver bullet to ESPs, another component related to certain objects is audio. For example, should a player fire a weapon behind a wall there will be a position stored in memory for the source of the audio which could be used to create a form of ESP, but of course this is substantially less beneficial than what they are currently capable of.
+With this in mind, we would want our solution to be as accurate as possible and as a result it may be slightly more computationally expensive than a few simple Unity Linecasts. When we need to factor in that the server will be running these checks every frame with each clients position being validated against every other clients position, we are potentially creating an exponential time complexity problem. Despite this there are a few things to consider to further minimize the performance impact, these may include:
+- Ensuring the logic to validate line of sight is not running unnecesary additional checks if line of sight has been established, like I have done in the example above.
+- Applying game-specific logic to minimize server calculations (i.e. we can send packets containing data about teammates without major cheating concerns, regardless of line of sight).
+- Disabling the feature in high player density areas. While this obviously works against what we are trying to solve, a computationally expensive operation could be exploited by bad actors to lag servers.
+- Not running these checks every frame on the server. In a more casual gaming setting this may be an acceptable compromise and would be a huge boost in performance.
+- Adding an additional fov/angle check prior to calculating line of sight. This would prevent unnecessary checks for players not facing one another and also severely impact the effectiveness of fov cheats for games.
+
+Functionality and efficiency aside, this of course is no silver bullet to ESPs, another component related to certain objects is audio. For example, should a player fire a weapon behind a wall or walk/run there will be a position stored in memory for the source of the audio which could be used to create a form of ESP, but this is substantially less beneficial than what they are currently capable of and should not be a reason to not pursue this as a method to combat ESPs.
 
 # Closing thoughts
 After spending an afternoon and evening thinking about and implementing this solution it is very interesting that games with few players in a single server instance are not all successfully expirementing and releasing similar solutions as this would not only prevent ESPs but also prevent certain types of aimbots as well (more specifically the ones associated with "rage hacking" that shoot players through walls). 
 
-While researching this topic I watched videos of players using ESP hacks on CS2 and Valorant as I expected these two games to be the perfect candidates to put this into practice. And as I expected, it would appear Valorant may use something similar as I did frequently observe ESPs having players popping in and out with the occassional teleporting so it is good to know that some developers are at least considering being more restrictive with the packets they send to clients about object positions.
+While researching this topic I watched gameplay of players using ESP hacks on CS2 and Valorant as I expected these two games to be the perfect candidates to put this into practice. And as I expected, it would appear Valorant may use something similar as I did frequently observe ESPs having players popping in and out with the occassional teleporting. Strangely CS2 does not seem to implement anything resembling what I have showcased but it is good to know that some developers are at least considering being more restrictive with the packets they send to clients about object positions.
+
+If you are aware of any games actively using similar methods to prevent ESP cheating I would be very interested to hear about it and please do [DM me on Twitter](https://twitter.com/ryan_jpw).
 
 
 # Resources / Credits
