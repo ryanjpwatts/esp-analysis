@@ -42,13 +42,18 @@ An additional form of server-sided anti-cheat is simply server-authorative featu
 ## The solution (sort of)
 As covered in the [How does ESP work?](https://github.com/ryanjpwatts/esp-analysis#how-does-esp-work) section, we know we need the objects position data in memory to create these ESP hacks to begin with so it begs the question, why are games not taking a more server-authorative stance on this and simply not sending positional data for objects if they cannot be seen by the player?
 
-Firstly, it's of course worth saying, it is easier said than done but it is a feasible option that would outright prevent ESPs as we know them from functioning at all. Let's look at a demo for this I made in a few hours using Unity with Mirror Networking -
+Firstly, it's of course worth saying, it is easier said than done but it is a feasible option that would outright prevent ESPs as we know them from functioning at all. Let's look at a demo for this I made using Unity with Mirror Networking -
 
-https://github.com/ryanjpwatts/esp-analysis/assets/33863267/5b62e1ff-01c2-487e-b019-6b9ad2ab94b2
+https://github.com/ryanjpwatts/esp-analysis/assets/33863267/74cf5827-c412-4ef5-86f3-aaea66a56c17
 
 ```
 public class ESPInterestManagement : InterestManagement
 {
+    // How far in unity measurements we want our players to be able to see other players from
+    private float viewDistance = 100.0f;
+    // The fov value to render within, cheaters can still modify their fov but players won't be rendered outside of it
+    private float fieldOfView = 60.0f;
+
     public override bool OnCheckObserver(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
         return ValidateObserver(identity, newObserver);
@@ -69,8 +74,22 @@ public class ESPInterestManagement : InterestManagement
         }
     }
 
-    private bool ValidateObserver(NetworkIdentity identity, NetworkConnectionToClient newObserver)
+    private bool ValidateDistance(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
+        // in "render" distance?
+        return Vector3.Distance(newObserver.identity.transform.position, identity.transform.position) <= viewDistance;
+    }
+
+    private bool ValidateFoVLoS(NetworkIdentity identity, NetworkConnectionToClient newObserver)
+    {
+        // is the client facing the other client?
+        Vector3 targetDir = identity.gameObject.transform.position - newObserver.identity.transform.position;
+        return Vector3.Angle(targetDir, newObserver.identity.transform.forward) <= fieldOfView;
+    }
+
+    private bool ValidateBlockers(NetworkIdentity identity, NetworkConnectionToClient newObserver)
+    {
+        // is there anything obstructing our view?
         int blockMask = 1 << 6;
         List<Vector3> angles = new() { new Vector3(0, 0, 0), -identity.transform.right, identity.transform.right, identity.transform.up, -identity.transform.up };
 
@@ -82,6 +101,14 @@ public class ESPInterestManagement : InterestManagement
         return false;
     }
 
+    private bool ValidateObserver(NetworkIdentity identity, NetworkConnectionToClient newObserver)
+    {
+        if (!ValidateDistance(identity, newObserver)) return false;
+        if (!ValidateFoVLoS(identity, newObserver)) return false;
+
+        return ValidateBlockers(identity, newObserver);
+    }
+
     [ServerCallback]
     void Update()
     {
@@ -89,20 +116,27 @@ public class ESPInterestManagement : InterestManagement
     }
 }
 ```
-This simple solution has a dedicated server running and 2 clients connected to it, making use of Mirror Networkings interest management solution and physics-based culling by sending out 5 Linecasts from one clients camera position to another, covering all angles that the player should be able to see from (straight, left, right, above, below). Once one of the rays successfully hit the client without an object marked with a block layer mask in the way then it will return and the server will proceed with sending the packets to the client.
+This simple solution has a dedicated server running and 2 clients connected to it, making use of Mirror Networkings interest management solution. The process before the server will send packets regarding a client goes as followed:
+1) Is the client within the view distance of the other client? I've set this to 100 units by default.
+2) Is the client facing our other client? This is checked through the fieldOfView variable and also helps prevent fov cheating.
+3) Are there objects marked with a blocking layer blocking every possible line of sight from our client to the other? This is done with physics-based culling by sending out 5 Linecasts from one clients camera position to another, covering all angles that the player should be able to see from (straight, left, right, above, below).
+  
+Once all conditions are validated it will return true and the server will proceed with sending the packets to the client.
 
 The two major drawbacks of this solution is functionality and efficiency. 
 
-Anti-cheating measures should never affect legitimate players experiences and if this solution fails for instance, causing one player to see another player and the other cannot or two players are unable to see each other you may have some very unhappy players, and this would be unacceptable in any competitive gaming scenario. Additionally, in my example above I am running the server and both clients locally so I do not have to worry about latency, the solution may look a bit less fluid in a situation where you have a player at 100ms and another at 10ms. This could be solved with a bit of leniency i.e. ensuring packets are sent just before they turn a corner but of course that may compromise the effectiveness of our method.
+Anti-cheating measures should never affect legitimate players experiences and if this solution fails for instance, causing one player to see another player and the other cannot or two players are unable to see each other you may have some very unhappy players, and this would be unacceptable in any competitive gaming scenario. This could be solved with a bit of leniency i.e. ensuring packets are sent just before they may turn a corner, keeping in mind that could partially compromise the effectiveness of our method, this should be something configurable dependent on how harsh the game server intends to enforce it.
 
 With this in mind, we would want our solution to be as accurate as possible and as a result it may be slightly more computationally expensive than a few simple Unity Linecasts. When we need to factor in that the server will be running these checks every frame with each clients position being validated against every other clients position, we are potentially creating an exponential time complexity problem. Despite this there are a few things to consider to further minimize the performance impact, these may include:
 - Ensuring the logic to validate line of sight is not running unnecesary additional checks if line of sight has been established, like I have done in the example above.
 - Applying game-specific logic to minimize server calculations (i.e. we can send packets containing data about teammates without major cheating concerns, regardless of line of sight).
 - Disabling the feature in high player density areas. While this obviously works against what we are trying to solve, a computationally expensive operation could be exploited by bad actors to lag servers.
 - Not running these checks every frame on the server. In a more casual gaming setting this may be an acceptable compromise and would be a huge boost in performance.
-- Adding an additional fov/angle check prior to calculating line of sight. This would prevent unnecessary checks for players not facing one another and also severely impact the effectiveness of fov cheats for games.
 
 Functionality and efficiency aside, this of course is no silver bullet to ESPs, another component related to certain objects is audio. For example, should a player fire a weapon behind a wall or walk/run there will be a position stored in memory for the source of the audio which could be used to create a form of ESP, but this is substantially less beneficial than what they are currently capable of and should not be a reason to not pursue this as a method to combat ESPs.
+
+# Performance
+soon
 
 # Closing thoughts
 After spending an afternoon and evening thinking about and implementing this solution it is very interesting that games with few players in a single server instance are not all successfully expirementing and releasing similar solutions as this would not only prevent ESPs but also prevent certain types of aimbots as well (more specifically the ones associated with "rage hacking" that shoot players through walls). 
