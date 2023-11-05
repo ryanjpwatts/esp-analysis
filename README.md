@@ -54,6 +54,7 @@ public class ESPInterestManagement : InterestManagement
     // The fov value to render within, cheaters can still modify their fov but players won't be rendered outside of it
     private float fieldOfView = 60.0f;
 
+
     public override bool OnCheckObserver(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
         return ValidateObserver(identity, newObserver);
@@ -76,26 +77,35 @@ public class ESPInterestManagement : InterestManagement
 
     private bool ValidateDistance(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
+        Transform target = identity.gameObject.GetComponentInChildren<Collider>().transform;
+        Transform observer = newObserver.identity.gameObject.GetComponentInChildren<Collider>().transform;
+
         // in "render" distance?
-        return Vector3.Distance(newObserver.identity.transform.position, identity.transform.position) <= viewDistance;
+        return Vector3.Distance(observer.position, target.position) <= viewDistance;
     }
 
     private bool ValidateFoVLoS(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
+        Transform target = identity.gameObject.GetComponentInChildren<Collider>().transform;
+        Transform observer = newObserver.identity.gameObject.GetComponentInChildren<Collider>().transform;
+
         // is the client facing the other client?
-        Vector3 targetDir = identity.gameObject.transform.position - newObserver.identity.transform.position;
-        return Vector3.Angle(targetDir, newObserver.identity.transform.forward) <= fieldOfView;
+        Vector3 targetDir = target.position - observer.position;
+        return Vector3.Angle(targetDir, observer.forward) <= fieldOfView;
     }
 
     private bool ValidateBlockers(NetworkIdentity identity, NetworkConnectionToClient newObserver)
     {
+        Transform target = identity.gameObject.GetComponentInChildren<Collider>().transform;
+        Transform observer = newObserver.identity.gameObject.GetComponentInChildren<Collider>().transform;
+
         // is there anything obstructing our view?
         int blockMask = 1 << 6;
-        List<Vector3> angles = new() { new Vector3(0, 0, 0), -identity.transform.right, identity.transform.right, identity.transform.up, -identity.transform.up };
+        List<Vector3> angles = new() { new Vector3(0, 0, 0), -observer.right, observer.right, observer.up, -observer.up };
 
         foreach (Vector3 angle in angles)
         {
-            if (!Physics.Linecast(identity.transform.position + angle, newObserver.identity.transform.position, out _, blockMask)) return true;
+            if (!Physics.Linecast(target.position + angle, observer.position, out _, blockMask)) return true;
         }
 
         return false;
