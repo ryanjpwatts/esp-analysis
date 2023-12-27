@@ -146,15 +146,33 @@ With this in mind, we would want our solution to be as accurate as possible and 
 Functionality and efficiency aside, this of course is no silver bullet to ESPs, another component related to certain objects is audio. For example, should a player fire a weapon behind a wall or walk/run there will be a position stored in memory for the source of the audio which could be used to create a form of ESP, but this is substantially less beneficial than what they are currently capable of and should not be a reason to not pursue this as a method to combat ESPs.
 
 # Performance
-soon
+To evaluate performance we will be looking at how many [ticks](https://learn.microsoft.com/en-us/dotnet/api/system.datetime.ticks?view=net-8.0) (1ms = 10000 ticks) it took on average to process our ESP solution on all players connected to our game server.
+
+
+| Clients | Process Time (avg, ticks) | Process Time (max, ticks) |
+|---------|---------------------------|---------------------------|
+| 0       | 4                         | 5                         |
+| 1       | 104                       | 235                       |
+| 3       | 498                       | 1372                      |
+| 5       | 1131                      | 3477                      |
+| 10      | 3570                      | 9150                      |
+
+For the table above I put the server in a worse case scenario, all players were in close proximity of each other and facing each other, requiring use of raycasting. I then took a batch of 60 server cycles and pulled the average and maximum time it took to process the ESP solution. As expected, performance is not the best, when having 10 clients connected we sometimes consume a full millisecond in processing and as the algorithm is not constant we can only expect this to take significantly longer as the number of clients increase. 
+
+If your game server will only host a small number of players at all times, these results may be fairly reasonable and would likely not be a major contributor to the overall processing of your game server cycles but for games with significantly more clients connected to one server, you may have to change your approach to maintain acceptable server performance.
+
+Additionally, while not measured due to the barebones nature of my game server, one positive thing we can gather from this is that the server is having to send less packets, which in turn is saving bandwidth and reducing the processing time in having to prepare and send these packets to game clients. This is due to the fact that the very purpose of our solution is to be cautious with the packets we send, not letting other players know where other players are if the game server does not believe they need that information yet.
+
 
 # Closing thoughts
-After spending an afternoon and evening thinking about and implementing this solution it is very interesting that games with few players in a single server instance are not all successfully expirementing and releasing similar solutions as this would not only prevent ESPs but also prevent certain types of aimbots as well (more specifically the ones associated with "rage hacking" that shoot players through walls). 
+After spending an afternoon and evening thinking about and implementing this solution it is very interesting that games with few players in a single server instance are not all successfully expirementing and releasing similar solutions as this would not only severely reduce the effectiveness of ESPs but also prevent certain types of aimbots as well, more specifically the ones associated with "rage hacking" that shoot players through walls.
 
 While researching this topic I watched gameplay of players using ESP hacks on CS2 and Valorant as I expected these two games to be the perfect candidates to put this into practice. And as I expected, it would appear Valorant may use something similar as I did frequently observe ESPs having players popping in and out with the occassional teleporting. Strangely CS2 does not seem to implement anything resembling what I have showcased but it is good to know that some developers are at least considering being more restrictive with the packets they send to clients about object positions.
 
-If you are aware of any games actively using similar methods to prevent ESP cheating I would be very interested to hear about it and please do [DM me on Twitter](https://twitter.com/ryan_jpw).
+**Edit 27/12/2023:**
+While researching Clientside Prediction and Peer Replication theory I stumbled upon [this article](https://technology.riotgames.com/news/demolishing-wallhacks-valorants-fog-war) by Riot Games security team, which goes into details about their "fog of war" system. It is good to confirm that they are indeed taking measures to prevent ESPs and being able to read about how they approached it, even more so when I was able to draw some parallels to my own approach.
 
+If you are aware of any games actively using similar methods to prevent ESP cheating I would be very interested to hear about it and please do [DM me on Twitter](https://twitter.com/ryan_jpw).
 
 # Resources / Credits
 [A very cool showcase from Sneaky Kitty Game Dev on how a more server-authorative approach could look](https://www.youtube.com/watch?v=znifN3rytnY)
