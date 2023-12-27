@@ -157,7 +157,10 @@ To evaluate performance we will be looking at how many [ticks](https://learn.mic
 | 5       | 1131                      | 3477                      |
 | 10      | 3570                      | 9150                      |
 
-For the table above I put the server in a worse case scenario, all players were in close proximity of each other and facing each other, requiring use of raycasting. I then took a batch of 60 server cycles and pulled the average and maximum time it took to process the ESP solution. As expected, performance is not the best, when having 10 clients connected we sometimes consume a full millisecond in processing and as the algorithm is not constant we can only expect this to take significantly longer as the number of clients increase. 
+![image](https://github.com/ryanjpwatts/esp-analysis/assets/33863267/c835bf41-947d-4328-b54a-73f8cea9e167)
+
+
+For the table/graph above I put the server in a worse case scenario, all players were in close proximity of each other and facing each other, requiring use of raycasting. I then took a batch of 60 server cycles and pulled the average and maximum time it took to process the ESP solution. As expected, performance is not the best, when having 10 clients connected we sometimes consume a full millisecond in processing and as the algorithm is not constant we can only expect this to take significantly longer as the number of clients increase. 
 
 If your game server will only host a small number of players at all times, these results may be fairly reasonable and would likely not be a major contributor to the overall processing of your game server cycles but for games with significantly more clients connected to one server, you may have to change your approach to maintain acceptable server performance.
 
